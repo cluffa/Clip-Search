@@ -209,6 +209,9 @@
             const copyButton = document.getElementById('copyButton');
             const testButton = document.getElementById('testButton');
 
+            // Set default template from current URL
+            templateInput.value = urlParams.get('q') || '';
+
             testButton.addEventListener('click', async () => {
                 try {
                     const clipboardText = await navigator.clipboard.readText();
