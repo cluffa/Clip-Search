@@ -72,6 +72,12 @@
             display: block;
             margin: 10px 0 5px;
         }
+        .cleanup-options {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
         .link-generator input[type="text"] {
             width: 100%;
             padding: 8px;
@@ -94,11 +100,20 @@
         .copy-button:hover {
             background-color: #2e9549;
         }
+        .test-button {
+            background-color: #fbbc05;
+            padding: 8px 16px;
+            color: black;
+        }
+        .test-button:hover {
+            background-color: #f2b600;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Clipboard to Google Search</h1>
+        <p><a href="https://github.com/cluffa/Clip-Search" target="_blank" style="color: #4285f4; text-decoration: none;">View source on GitHub</a></p>
         <p>Click the button to search Google with your clipboard text.</p>
         <button id="searchButton">Search with Clipboard</button>
         <div id="preview"></div>
@@ -106,10 +121,17 @@
         <div class="link-generator">
             <h2>Link Generator</h2>
             <label>Search Template (use %s for clipboard text):</label>
-            <input type="text" id="templateInput" placeholder="Example: site:example.com %s">
+            <div class="copy-container">
+                <input type="text" id="templateInput" placeholder="Example: site:example.com %s">
+                <button class="test-button" id="testButton">Test</button>
+            </div>
             <label>
                 <input type="checkbox" id="autoCheckbox">
                 Auto-redirect immediately
+            </label>
+            <label>
+                <input type="checkbox" id="cleanupCheckbox">
+                Clean up text (remove newlines)
             </label>
             <div class="copy-container">
                 <input type="text" id="generatedLink" readonly>
@@ -130,18 +152,25 @@
             const urlParams = new URLSearchParams(window.location.search);
             const searchTemplate = urlParams.get('q') || '%s';
             const autoRedirect = urlParams.get('auto') !== null;
+            const cleanupEnabled = urlParams.get('cleanup') !== null;
+            
+            async function cleanText(text) {
+                if (!cleanupEnabled) return text;
+                return text.replace(/\s*\n\s*/g, ' ').trim();
+            }
             
             async function searchWithClipboard() {
                 try {
                     statusElement.textContent = '';
                     previewElement.style.display = 'none';
                     
-                    const clipboardText = await navigator.clipboard.readText();
+                    let clipboardText = await navigator.clipboard.readText();
+                    clipboardText = await cleanText(clipboardText);
                     
                     sessionStorage.setItem('clipboardAccessGranted', 'true');
                     clipboardAccessGranted = true;
                     
-                    if (clipboardText.trim() === '') {
+                    if (clipboardText === '') {
                         statusElement.textContent = 'Clipboard is empty. Copy some text first.';
                         return;
                     }
@@ -175,8 +204,21 @@
             // Link generator functionality
             const templateInput = document.getElementById('templateInput');
             const autoCheckbox = document.getElementById('autoCheckbox');
+            const cleanupCheckbox = document.getElementById('cleanupCheckbox');
             const generatedLink = document.getElementById('generatedLink');
             const copyButton = document.getElementById('copyButton');
+            const testButton = document.getElementById('testButton');
+
+            testButton.addEventListener('click', async () => {
+                try {
+                    const clipboardText = await navigator.clipboard.readText();
+                    const template = templateInput.value.trim() || '%s';
+                    const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
+                    window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank');
+                } catch (err) {
+                    statusElement.textContent = 'Error accessing clipboard: ' + err.message;
+                }
+            });
 
             function updateGeneratedLink() {
                 const baseUrl = window.location.origin + window.location.pathname;
@@ -189,6 +231,9 @@
                 if (autoCheckbox.checked) {
                     params.set('auto', '');
                 }
+                if (cleanupCheckbox.checked) {
+                    params.set('cleanup', '');
+                }
 
                 const queryString = params.toString();
                 generatedLink.value = baseUrl + (queryString ? '?' + queryString : '');
@@ -196,6 +241,7 @@
 
             templateInput.addEventListener('input', updateGeneratedLink);
             autoCheckbox.addEventListener('change', updateGeneratedLink);
+            cleanupCheckbox.addEventListener('change', updateGeneratedLink);
 
             copyButton.addEventListener('click', async () => {
                 try {
