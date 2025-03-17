@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard to Google Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 90%;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        #preview {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            max-width: 100%;
+            word-break: break-word;
+            max-height: 100px;
+            overflow-y: auto;
+            display: none;
+        }
+        #status {
+            margin-top: 15px;
+            color: #555;
+        }
+        #manualInput {
+            width: 100%;
+            padding: 8px;
+            margin-top: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            display: none;
+        }
+        .fallback {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Clipboard to Google Search</h1>
+        <p>Click the button to search Google with your clipboard text in a new tab.</p>
+        <button id="searchButton">Search with Clipboard</button>
+        <input type="text" id="manualInput" placeholder="Type or paste search text here">
+        <div id="preview"></div>
+        <p id="status"></p>
+        <p class="fallback"><a href="#" id="fallbackLink">Can't access clipboard? Click here</a></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchButton = document.getElementById('searchButton');
+            const statusElement = document.getElementById('status');
+            const previewElement = document.getElementById('preview');
+            const manualInput = document.getElementById('manualInput');
+            const fallbackLink = document.getElementById('fallbackLink');
+            
+            // Check if we've successfully accessed clipboard before
+            let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
+            
+            // Function to handle the search
+            async function searchWithClipboard() {
+                try {
+                    // Clear previous status
+                    statusElement.textContent = '';
+                    previewElement.style.display = 'none';
+                    
+                    // Request clipboard permission and get text
+                    const clipboardText = await navigator.clipboard.readText();
+                    
+                    // Store successful access in session storage
+                    sessionStorage.setItem('clipboardAccessGranted', 'true');
+                    clipboardAccessGranted = true;
+                    
+                    if (clipboardText.trim() === '') {
+                        statusElement.textContent = 'Clipboard is empty. Copy some text first.';
+                        return;
+                    }
+                    
+                    // Show preview of what we're searching for
+                    previewElement.style.display = 'block';
+                    previewElement.textContent = `Searching for: "${clipboardText.substring(0, 100)}${clipboardText.length > 100 ? '...' : ''}"`;
+                    
+                    // Create Google search URL with clipboard text
+                    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(clipboardText)}`;
+                    
+                    // Open in a new tab
+                    window.open(searchUrl, '_blank');
+                    
+                    statusElement.textContent = 'Search opened in a new tab.';
+                    
+                } catch (err) {
+                    // If permission denied or other error, show manual input
+                    sessionStorage.setItem('clipboardAccessGranted', 'false');
+                    clipboardAccessGranted = false;
+                    showManualInput();
+                    statusElement.textContent = 'Error accessing clipboard: ' + err.message;
+                    console.error('Failed to read clipboard:', err);
+                }
+            }
+            
+            // Function to show manual input field
+            function showManualInput() {
+                manualInput.style.display = 'block';
+                manualInput.focus();
+            }
+            
+            // Function to search with manual input
+            function searchWithManualInput() {
+                const searchText = manualInput.value.trim();
+                if (searchText === '') {
+                    statusElement.textContent = 'Please enter text to search.';
+                    return;
+                }
+                
+                // Show preview of what we're searching for
+                previewElement.style.display = 'block';
+                previewElement.textContent = `Searching for: "${searchText.substring(0, 100)}${searchText.length > 100 ? '...' : ''}"`;
+                
+                // Create Google search URL with input text
+                const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchText)}`;
+                
+                // Open in a new tab
+                window.open(searchUrl, '_blank');
+                
+                statusElement.textContent = 'Search opened in a new tab.';
+            }
+            
+            // Add button click handler
+            searchButton.addEventListener('click', function() {
+                if (clipboardAccessGranted) {
+                    // If we've successfully accessed clipboard before, try again
+                    searchWithClipboard();
+                } else {
+                    // First attempt or previous failure
+                    searchWithClipboard().catch(() => {
+                        showManualInput();
+                    });
+                }
+            });
+            
+            // Add fallback link handler
+            fallbackLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showManualInput();
+            });
+            
+            // Add enter key handler for manual input
+            manualInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchWithManualInput();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
