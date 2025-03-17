@@ -62,6 +62,38 @@
             font-size: 14px;
             color: #666;
         }
+        .link-generator {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: left;
+        }
+        .link-generator label {
+            display: block;
+            margin: 10px 0 5px;
+        }
+        .link-generator input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .link-generator .copy-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .link-generator .copy-container input {
+            flex-grow: 1;
+        }
+        .copy-button {
+            background-color: #34a853;
+            padding: 8px 16px;
+        }
+        .copy-button:hover {
+            background-color: #2e9549;
+        }
     </style>
 </head>
 <body>
@@ -71,6 +103,19 @@
         <button id="searchButton">Search with Clipboard</button>
         <div id="preview"></div>
         <p id="status"></p>
+        <div class="link-generator">
+            <h2>Link Generator</h2>
+            <label>Search Template (use %s for clipboard text):</label>
+            <input type="text" id="templateInput" placeholder="Example: site:example.com %s">
+            <label>
+                <input type="checkbox" id="autoCheckbox">
+                Auto-redirect immediately
+            </label>
+            <div class="copy-container">
+                <input type="text" id="generatedLink" readonly>
+                <button class="copy-button" id="copyButton">Copy Link</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -80,6 +125,11 @@
             const previewElement = document.getElementById('preview');
             
             let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
+            
+            // Get URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const searchTemplate = urlParams.get('q') || '%s';
+            const autoRedirect = urlParams.get('auto') !== null;
             
             async function searchWithClipboard() {
                 try {
@@ -96,7 +146,9 @@
                         return;
                     }
                     
-                    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(clipboardText)}`;
+                    // Replace %s in template with encoded clipboard text
+                    const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
+                    const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
                     window.location.href = searchUrl;
                     
                 } catch (err) {
@@ -114,6 +166,51 @@
                     searchWithClipboard();
                 }
             });
+
+            // Auto-trigger search if auto parameter is present
+            if (autoRedirect) {
+                searchWithClipboard();
+            }
+
+            // Link generator functionality
+            const templateInput = document.getElementById('templateInput');
+            const autoCheckbox = document.getElementById('autoCheckbox');
+            const generatedLink = document.getElementById('generatedLink');
+            const copyButton = document.getElementById('copyButton');
+
+            function updateGeneratedLink() {
+                const baseUrl = window.location.origin + window.location.pathname;
+                const template = templateInput.value.trim();
+                const params = new URLSearchParams();
+                
+                if (template) {
+                    params.set('q', template);
+                }
+                if (autoCheckbox.checked) {
+                    params.set('auto', '');
+                }
+
+                const queryString = params.toString();
+                generatedLink.value = baseUrl + (queryString ? '?' + queryString : '');
+            }
+
+            templateInput.addEventListener('input', updateGeneratedLink);
+            autoCheckbox.addEventListener('change', updateGeneratedLink);
+
+            copyButton.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(generatedLink.value);
+                    copyButton.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyButton.textContent = 'Copy Link';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            });
+
+            // Initialize generated link
+            updateGeneratedLink();
         });
     </script>
 </body>
