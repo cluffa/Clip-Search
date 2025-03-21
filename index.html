@@ -104,17 +104,72 @@
             background-color: #fbbc05;
             padding: 8px 16px;
             color: black;
+            width: 50%;
+            margin-top: 20px;
         }
         .test-button:hover {
             background-color: #f2b600;
         }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .button-container button {
+            flex: 1;
+            margin-top: 0;
+        }
     </style>
+    <script>
+        // Core functionality moved to head for faster execution
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchTemplate = urlParams.get('q') || '%s';
+        const autoRedirect = urlParams.get('auto') !== null;
+        const cleanupEnabled = urlParams.get('cleanup') !== null;
+        
+        // Cache the clipboard read promise
+        let clipboardPromise = null;
+        
+        async function getClipboardText() {
+            if (!clipboardPromise) {
+                clipboardPromise = navigator.clipboard.readText();
+            }
+            return clipboardPromise;
+        }
+        
+        async function cleanText(text) {
+            if (!cleanupEnabled) return text;
+            return text.replace(/\s*\n\s*/g, ' ').trim();
+        }
+        
+        async function searchWithClipboard() {
+            try {
+                let clipboardText = await getClipboardText();
+                clipboardText = await cleanText(clipboardText);
+                
+                if (clipboardText === '') {
+                    return false;
+                }
+                
+                const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
+                const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+                window.location.href = searchUrl;
+                return true;
+            } catch (err) {
+                console.error('Failed to read clipboard:', err);
+                return false;
+            }
+        }
+
+        // Execute auto-redirect immediately if enabled
+        if (autoRedirect) {
+            searchWithClipboard();
+        }
+    </script>
 </head>
 <body>
     <div class="container">
         <h1>Clipboard to Google Search</h1>
-        <p><a href="https://github.com/cluffa/Clip-Search" target="_blank" style="color: #4285f4; text-decoration: none;">View source on GitHub</a></p>
-        <p>Click the button to search Google with your clipboard text.</p>
         <button id="searchButton">Search with Clipboard</button>
         <div id="preview"></div>
         <p id="status"></p>
@@ -123,7 +178,6 @@
             <label>Search Template (use %s for clipboard text):</label>
             <div class="copy-container">
                 <input type="text" id="templateInput" placeholder="Example: site:example.com %s">
-                <button class="test-button" id="testButton">Test</button>
             </div>
             <label>
                 <input type="checkbox" id="autoCheckbox">
@@ -135,86 +189,46 @@
             </label>
             <div class="copy-container">
                 <input type="text" id="generatedLink" readonly>
+            </div>
+            <div class="button-container">
+                <button class="test-button" id="testButton">Test</button>
                 <button class="copy-button" id="copyButton">Copy Link</button>
             </div>
         </div>
+        
     </div>
-
+    <p><a href="https://github.com/cluffa/Clip-Search" target="_blank" style="color: #4285f4; text-decoration: none;">View source on GitHub</a></p>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const searchButton = document.getElementById('searchButton');
             const statusElement = document.getElementById('status');
             const previewElement = document.getElementById('preview');
-            
-            let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
-            
-            // Get URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const searchTemplate = urlParams.get('q') || '%s';
-            const autoRedirect = urlParams.get('auto') !== null;
-            const cleanupEnabled = urlParams.get('cleanup') !== null;
-            
-            async function cleanText(text) {
-                if (!cleanupEnabled) return text;
-                return text.replace(/\s*\n\s*/g, ' ').trim();
-            }
-            
-            async function searchWithClipboard() {
-                try {
-                    statusElement.textContent = '';
-                    previewElement.style.display = 'none';
-                    
-                    let clipboardText = await navigator.clipboard.readText();
-                    clipboardText = await cleanText(clipboardText);
-                    
-                    sessionStorage.setItem('clipboardAccessGranted', 'true');
-                    clipboardAccessGranted = true;
-                    
-                    if (clipboardText === '') {
-                        statusElement.textContent = 'Clipboard is empty. Copy some text first.';
-                        return;
-                    }
-                    
-                    // Replace %s in template with encoded clipboard text
-                    const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
-                    const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
-                    window.location.href = searchUrl;
-                    
-                } catch (err) {
-                    sessionStorage.setItem('clipboardAccessGranted', 'false');
-                    clipboardAccessGranted = false;
-                    statusElement.textContent = 'Error accessing clipboard: ' + err.message;
-                    console.error('Failed to read clipboard:', err);
-                }
-            }
-            
-            searchButton.addEventListener('click', function() {
-                if (clipboardAccessGranted) {
-                    searchWithClipboard();
-                } else {
-                    searchWithClipboard();
-                }
-            });
-
-            // Auto-trigger search if auto parameter is present
-            if (autoRedirect) {
-                searchWithClipboard();
-            }
-
-            // Link generator functionality
             const templateInput = document.getElementById('templateInput');
             const autoCheckbox = document.getElementById('autoCheckbox');
             const cleanupCheckbox = document.getElementById('cleanupCheckbox');
             const generatedLink = document.getElementById('generatedLink');
             const copyButton = document.getElementById('copyButton');
             const testButton = document.getElementById('testButton');
+            
+            let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
+            
+            // Modified to use the global searchWithClipboard function
+            searchButton.addEventListener('click', async function() {
+                statusElement.textContent = '';
+                previewElement.style.display = 'none';
+                
+                const success = await searchWithClipboard();
+                if (!success) {
+                    statusElement.textContent = 'Error: Clipboard is empty or access denied';
+                }
+            });
 
             // Set default template from current URL
-            templateInput.value = urlParams.get('q') || '';
+            templateInput.value = searchTemplate;
 
             testButton.addEventListener('click', async () => {
                 try {
-                    const clipboardText = await navigator.clipboard.readText();
+                    const clipboardText = await getClipboardText();
                     const template = templateInput.value.trim() || '%s';
                     const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
                     window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank');
