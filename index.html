@@ -4,6 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clipboard to Google Search</title>
+    <link rel="preconnect" href="https://www.google.com">
+    <link rel="preconnect" href="https://www.google.com/maps">
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchTemplate = urlParams.get('q') || '%s';
+        const autoRedirect = urlParams.get('auto') !== null;
+        const cleanupEnabled = urlParams.get('cleanup') !== null;
+        const queryType = urlParams.get('type') || 'web';
+        
+        // Cache the clipboard read promise
+        let clipboardPromise = null;
+        
+        async function getClipboardText() {
+            if (!clipboardPromise) {
+                clipboardPromise = navigator.clipboard.readText();
+            }
+            return clipboardPromise;
+        }
+        
+        async function cleanText(text) {
+            if (!cleanupEnabled) return text;
+            return text.replace(/\s*\n\s*/g, ' ').trim();
+        }
+        
+        async function searchWithClipboard() {
+            try {
+                let clipboardText = await getClipboardText();
+                clipboardText = await cleanText(clipboardText);
+                
+                if (clipboardText === '') {
+                    return false;
+                }
+                
+                const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
+                const type = document.getElementById('queryType').value;
+                const searchUrl = type === 'maps' 
+                    ? `https://www.google.com/maps/search/${searchQuery}`
+                    : `https://www.google.com/search?q=${searchQuery}`;
+                window.location.href = searchUrl;
+                return true;
+            } catch (err) {
+                console.error('Failed to read clipboard:', err);
+                return false;
+            }
+        }
+
+        // Execute auto-redirect immediately if enabled
+        if (autoRedirect) {
+            searchWithClipboard();
+        }
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -173,55 +224,6 @@
             font-style: italic;
         }
     </style>
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const searchTemplate = urlParams.get('q') || '%s';
-        const autoRedirect = urlParams.get('auto') !== null;
-        const cleanupEnabled = urlParams.get('cleanup') !== null;
-        const queryType = urlParams.get('type') || 'web';
-        
-        // Cache the clipboard read promise
-        let clipboardPromise = null;
-        
-        async function getClipboardText() {
-            if (!clipboardPromise) {
-                clipboardPromise = navigator.clipboard.readText();
-            }
-            return clipboardPromise;
-        }
-        
-        async function cleanText(text) {
-            if (!cleanupEnabled) return text;
-            return text.replace(/\s*\n\s*/g, ' ').trim();
-        }
-        
-        async function searchWithClipboard() {
-            try {
-                let clipboardText = await getClipboardText();
-                clipboardText = await cleanText(clipboardText);
-                
-                if (clipboardText === '') {
-                    return false;
-                }
-                
-                const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
-                const type = document.getElementById('queryType').value;
-                const searchUrl = type === 'maps' 
-                    ? `https://www.google.com/maps/search/${searchQuery}`
-                    : `https://www.google.com/search?q=${searchQuery}`;
-                window.location.href = searchUrl;
-                return true;
-            } catch (err) {
-                console.error('Failed to read clipboard:', err);
-                return false;
-            }
-        }
-
-        // Execute auto-redirect immediately if enabled
-        if (autoRedirect) {
-            searchWithClipboard();
-        }
-    </script>
 </head>
 <body>
     <div class="container">
@@ -333,7 +335,7 @@
             function updateCurrentTemplate() {
                 const template = searchTemplate || '%s';  // Use searchTemplate from URL instead of input value
                 const type = queryType;  // Use queryType from URL instead of select value
-                currentTemplate.textContent = `Template: ${template} (${type})`;
+                currentTemplate.textContent = `Template (${type}): ${template}`;
             }
 
             // Initialize template display from URL parameters
