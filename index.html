@@ -93,6 +93,20 @@
         .link-generator .copy-container input {
             flex-grow: 1;
         }
+        .query-type-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .query-type-container label {
+            margin: 0;
+            white-space: nowrap;
+        }
+        .query-type-container select {
+            margin: 0;
+            flex-grow: 1;
+        }
         .copy-button {
             background-color: #34a853;
             padding: 8px 16px;
@@ -104,8 +118,7 @@
             background-color: #fbbc05;
             padding: 8px 16px;
             color: black;
-            width: 50%;
-            margin-top: 20px;
+            margin-top: 0;
         }
         .test-button:hover {
             background-color: #f2b600;
@@ -119,13 +132,27 @@
             flex: 1;
             margin-top: 0;
         }
+        #testAutoButton {
+            display: none;
+        }
+        #testAutoButton.visible {
+            display: block;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            margin-bottom: 10px;
+        }
     </style>
     <script>
-        // Core functionality moved to head for faster execution
         const urlParams = new URLSearchParams(window.location.search);
         const searchTemplate = urlParams.get('q') || '%s';
         const autoRedirect = urlParams.get('auto') !== null;
         const cleanupEnabled = urlParams.get('cleanup') !== null;
+        const queryType = urlParams.get('type') || 'web';
         
         // Cache the clipboard read promise
         let clipboardPromise = null;
@@ -152,7 +179,10 @@
                 }
                 
                 const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
-                const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+                const type = document.getElementById('queryType').value;
+                const searchUrl = type === 'maps' 
+                    ? `https://www.google.com/maps/search/${searchQuery}`
+                    : `https://www.google.com/search?q=${searchQuery}`;
                 window.location.href = searchUrl;
                 return true;
             } catch (err) {
@@ -179,6 +209,13 @@
             <div class="copy-container">
                 <input type="text" id="templateInput" placeholder="Example: site:example.com %s">
             </div>
+            <div class="query-type-container">
+                <label for="queryType">Query Type:</label>
+                <select id="queryType">
+                    <option value="web">Web Search</option>
+                    <option value="maps">Maps Search</option>
+                </select>
+            </div>
             <label>
                 <input type="checkbox" id="autoCheckbox">
                 Auto-redirect immediately
@@ -191,7 +228,8 @@
                 <input type="text" id="generatedLink" readonly>
             </div>
             <div class="button-container">
-                <button class="test-button" id="testButton">Test</button>
+                <button class="test-button" id="testButton">Test Query</button>
+                <button class="test-button" id="testAutoButton">Test Auto-redirect</button>
                 <button class="copy-button" id="copyButton">Copy Link</button>
             </div>
         </div>
@@ -209,6 +247,7 @@
             const generatedLink = document.getElementById('generatedLink');
             const copyButton = document.getElementById('copyButton');
             const testButton = document.getElementById('testButton');
+            const testAutoButton = document.getElementById('testAutoButton');
             
             let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
             
@@ -231,7 +270,28 @@
                     const clipboardText = await getClipboardText();
                     const template = templateInput.value.trim() || '%s';
                     const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
-                    window.open(`https://www.google.com/search?q=${searchQuery}`, '_blank');
+                    const type = document.getElementById('queryType').value;
+                    const searchUrl = type === 'maps' 
+                        ? `https://www.google.com/maps/search/${searchQuery}`
+                        : `https://www.google.com/search?q=${searchQuery}`;
+                    window.open(searchUrl, '_blank');
+                } catch (err) {
+                    statusElement.textContent = 'Error accessing clipboard: ' + err.message;
+                }
+            });
+
+            testAutoButton.addEventListener('click', async () => {
+                try {
+                    const clipboardText = await getClipboardText();
+                    const template = templateInput.value.trim() || '%s';
+                    const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
+                    const type = document.getElementById('queryType').value;
+                    const searchUrl = window.location.origin + window.location.pathname 
+                        + '?q=' + encodeURIComponent(template)
+                        + '&auto'
+                        + (type !== 'web' ? '&type=' + type : '')
+                        + (cleanupCheckbox.checked ? '&cleanup' : '');
+                    window.open(searchUrl, '_blank');
                 } catch (err) {
                     statusElement.textContent = 'Error accessing clipboard: ' + err.message;
                 }
@@ -251,10 +311,33 @@
                 if (cleanupCheckbox.checked) {
                     params.set('cleanup', '');
                 }
+                
+                const type = document.getElementById('queryType').value;
+                if (type !== 'web') {
+                    params.set('type', type);
+                }
 
                 const queryString = params.toString();
                 generatedLink.value = baseUrl + (queryString ? '?' + queryString : '');
             }
+
+            function updateTestAutoButton() {
+                const testAutoButton = document.getElementById('testAutoButton');
+                testAutoButton.classList.toggle('visible', autoCheckbox.checked);
+            }
+
+            // Add to existing event listener
+            autoCheckbox.addEventListener('change', () => {
+                updateTestAutoButton();
+                updateGeneratedLink();
+            });
+
+            // Initialize test auto button visibility
+            updateTestAutoButton();
+
+            // Initialize query type from URL
+            document.getElementById('queryType').value = queryType;
+            document.getElementById('queryType').addEventListener('change', updateGeneratedLink);
 
             templateInput.addEventListener('input', updateGeneratedLink);
             autoCheckbox.addEventListener('change', updateGeneratedLink);
