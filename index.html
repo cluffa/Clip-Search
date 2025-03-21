@@ -132,6 +132,12 @@
             flex: 1;
             margin-top: 0;
         }
+        .apply-button {
+            background-color: #EA4335;
+        }
+        .apply-button:hover {
+            background-color: #d33828;
+        }
         #testAutoButton {
             display: none;
         }
@@ -145,6 +151,26 @@
             border-radius: 4px;
             background-color: white;
             margin-bottom: 10px;
+        }
+        .footer-link {
+            color: #4285f4;
+            text-decoration: none;
+            font-size: 14px;
+            margin: 0 10px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .footer-link:hover {
+            text-decoration: underline;
+            background: none !important;
+        }
+        .current-template {
+            color: #666;
+            font-size: 14px;
+            margin: 5px 0;
+            font-style: italic;
         }
     </style>
     <script>
@@ -201,6 +227,7 @@
     <div class="container">
         <h1>Clipboard to Google Search</h1>
         <button id="searchButton">Search with Clipboard</button>
+        <p id="currentTemplate" class="current-template"></p>
         <div id="preview"></div>
         <p id="status"></p>
         <div class="link-generator">
@@ -231,11 +258,15 @@
                 <button class="test-button" id="testButton">Test Query</button>
                 <button class="test-button" id="testAutoButton">Test Auto-redirect</button>
                 <button class="copy-button" id="copyButton">Copy Link</button>
+                <button class="apply-button" id="applyButton">Apply to Current URL</button>
             </div>
         </div>
         
     </div>
-    <p><a href="https://github.com/cluffa/Clip-Search" target="_blank" style="color: #4285f4; text-decoration: none;">View source on GitHub</a></p>
+    <p>
+        <a href="https://github.com/cluffa/Clip-Search" target="_blank" class="footer-link">View source on GitHub</a>
+        <button class="footer-link" id="bookmarkButton">Add to Bookmarks</button>
+    </p>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const searchButton = document.getElementById('searchButton');
@@ -248,6 +279,8 @@
             const copyButton = document.getElementById('copyButton');
             const testButton = document.getElementById('testButton');
             const testAutoButton = document.getElementById('testAutoButton');
+            const applyButton = document.getElementById('applyButton');
+            const currentTemplate = document.getElementById('currentTemplate');
             
             let clipboardAccessGranted = sessionStorage.getItem('clipboardAccessGranted') === 'true';
             
@@ -297,7 +330,16 @@
                 }
             });
 
-            function updateGeneratedLink() {
+            function updateCurrentTemplate() {
+                const template = searchTemplate || '%s';  // Use searchTemplate from URL instead of input value
+                const type = queryType;  // Use queryType from URL instead of select value
+                currentTemplate.textContent = `Template: ${template} (${type})`;
+            }
+
+            // Initialize template display from URL parameters
+            updateCurrentTemplate();
+
+            function updateGeneratedLink(updateCurrentUrl = false) {
                 const baseUrl = window.location.origin + window.location.pathname;
                 const template = templateInput.value.trim();
                 const params = new URLSearchParams();
@@ -318,8 +360,20 @@
                 }
 
                 const queryString = params.toString();
-                generatedLink.value = baseUrl + (queryString ? '?' + queryString : '');
+                const newUrl = baseUrl + (queryString ? '?' + queryString : '');
+                
+                if (updateCurrentUrl) {
+                    // Update URL without refreshing the page
+                    window.history.pushState({}, '', newUrl);
+                    updateCurrentTemplate();
+                }
+                
+                generatedLink.value = newUrl;
             }
+
+            applyButton.addEventListener('click', () => {
+                updateGeneratedLink(true);
+            });
 
             function updateTestAutoButton() {
                 const testAutoButton = document.getElementById('testAutoButton');
@@ -329,7 +383,7 @@
             // Add to existing event listener
             autoCheckbox.addEventListener('change', () => {
                 updateTestAutoButton();
-                updateGeneratedLink();
+                updateGeneratedLink(false);
             });
 
             // Initialize test auto button visibility
@@ -337,11 +391,11 @@
 
             // Initialize query type from URL
             document.getElementById('queryType').value = queryType;
-            document.getElementById('queryType').addEventListener('change', updateGeneratedLink);
+            document.getElementById('queryType').addEventListener('change', () => updateGeneratedLink(false));
 
-            templateInput.addEventListener('input', updateGeneratedLink);
-            autoCheckbox.addEventListener('change', updateGeneratedLink);
-            cleanupCheckbox.addEventListener('change', updateGeneratedLink);
+            templateInput.addEventListener('input', () => updateGeneratedLink(false));
+            autoCheckbox.addEventListener('change', () => updateGeneratedLink(false));
+            cleanupCheckbox.addEventListener('change', () => updateGeneratedLink(false));
 
             copyButton.addEventListener('click', async () => {
                 try {
@@ -356,7 +410,28 @@
             });
 
             // Initialize generated link
-            updateGeneratedLink();
+            updateGeneratedLink(false);
+
+            // Initialize template display
+            updateCurrentTemplate();
+
+            // Add bookmark functionality
+            const bookmarkButton = document.getElementById('bookmarkButton');
+            bookmarkButton.addEventListener('click', function() {
+                const instructions = 
+                    '1. Configure your search settings in the Link Generator\n' +
+                    '2. Click "Apply to Current URL" to update the page URL\n' +
+                    '3. Press ' + (navigator.userAgent.toLowerCase().indexOf('mac') != -1 ? 'Cmd' : 'Ctrl') + '+D to bookmark this page\n\n' +
+                    'The bookmark will save your current search template and settings.';
+                    
+                if (window.sidebar && window.sidebar.addPanel) { // Firefox
+                    window.sidebar.addPanel(document.title, window.location.href, '');
+                } else if (window.external && ('AddFavorite' in window.external)) { // IE
+                    window.external.AddFavorite(window.location.href, document.title);
+                } else { // Chrome, Safari, etc.
+                    alert(instructions);
+                }
+            });
         });
     </script>
 </body>
