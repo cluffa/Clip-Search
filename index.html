@@ -28,31 +28,59 @@
             return text.replace(/\s*\n\s*/g, ' ').trim();
         }
         
-        async function searchWithClipboard() {
+        async function searchWithClipboard(isAutoRedirect = false) {
             try {
                 let clipboardText = await getClipboardText();
-                clipboardText = await cleanText(clipboardText);
                 
                 if (clipboardText === '') {
                     return false;
                 }
-                
-                const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
-                const type = document.getElementById('queryType').value;
-                const searchUrl = type === 'maps' 
-                    ? `https://www.google.com/maps/search/${searchQuery}`
-                    : `https://www.google.com/search?q=${searchQuery}`;
-                window.location.href = searchUrl;
-                return true;
+
+                const lines = clipboardText.split('\n').map(line => line.trim()).filter(line => line !== '');
+
+                if (lines.length > 1) {
+                    // Multiple lines: Open each in a new tab
+                    for (const line of lines) {
+                        const cleanedLine = await cleanText(line); // Clean each line individually if enabled
+                        const searchQuery = searchTemplate.replace('%s', encodeURIComponent(cleanedLine));
+                        const type = document.getElementById('queryType').value;
+                        const searchUrl = type === 'maps' 
+                            ? `https://www.google.com/maps/search/${searchQuery}`
+                            : `https://www.google.com/search?q=${searchQuery}`;
+                        window.open(searchUrl, '_blank');
+                    }
+                    return true; // Indicate success, even though multiple tabs were opened
+                } else {
+                    // Single line or no newlines
+                    clipboardText = await cleanText(clipboardText); // Clean the whole text
+                    if (clipboardText === '') return false; // Check again after cleaning
+
+                    const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
+                    const type = document.getElementById('queryType').value;
+                    const searchUrl = type === 'maps' 
+                        ? `https://www.google.com/maps/search/${searchQuery}`
+                        : `https://www.google.com/search?q=${searchQuery}`;
+                    
+                    // Only redirect current tab if it's an auto-redirect or a direct button click
+                    // Otherwise (e.g., called from test button), this function shouldn't navigate
+                    if (isAutoRedirect || !arguments.length) { // Check if called by auto-redirect or button click
+                         window.location.href = searchUrl;
+                    }
+                    // If called otherwise (e.g., potentially from test button in the future, though it has its own logic now)
+                    // it would just return the URL or success status without navigating.
+                    // For now, the direct button click redirects the current tab.
+                    return true;
+                }
             } catch (err) {
-                console.error('Failed to read clipboard:', err);
+                console.error('Failed to read clipboard or process search:', err);
+                statusElement.textContent = 'Error: ' + err.message; // Display error
                 return false;
             }
         }
 
         // Execute auto-redirect immediately if enabled
         if (autoRedirect) {
-            searchWithClipboard();
+            searchWithClipboard(true); // Pass true to indicate it's an auto-redirect call
         }
     </script>
     <style>
@@ -255,7 +283,7 @@
             </label>
             <label>
                 <input type="checkbox" id="cleanupCheckbox">
-                Clean up text (remove newlines)
+                Clean up text
             </label>
             <div class="copy-container">
                 <input type="text" id="generatedLink" readonly>
@@ -295,8 +323,9 @@
                 statusElement.textContent = '';
                 previewElement.style.display = 'none';
                 
-                const success = await searchWithClipboard();
-                if (!success) {
+                // Call searchWithClipboard without arguments for standard button click behavior
+                const success = await searchWithClipboard(); 
+                if (!success && !statusElement.textContent) { // Update status only if searchWithClipboard didn't set an error
                     statusElement.textContent = 'Error: Clipboard is empty or access denied';
                 }
             });
@@ -306,14 +335,35 @@
 
             testButton.addEventListener('click', async () => {
                 try {
-                    const clipboardText = await getClipboardText();
+                    let clipboardText = await getClipboardText();
                     const template = templateInput.value.trim() || '%s';
-                    const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
                     const type = document.getElementById('queryType').value;
-                    const searchUrl = type === 'maps' 
-                        ? `https://www.google.com/maps/search/${searchQuery}`
-                        : `https://www.google.com/search?q=${searchQuery}`;
-                    window.open(searchUrl, '_blank');
+
+                    const lines = clipboardText.split('\n').map(line => line.trim()).filter(line => line !== '');
+
+                    if (lines.length > 1) {
+                        // Multiple lines: Open each in a new tab
+                        for (const line of lines) {
+                            const cleanedLine = await cleanText(line); // Clean each line individually if enabled
+                            const searchQuery = template.replace('%s', encodeURIComponent(cleanedLine));
+                            const searchUrl = type === 'maps' 
+                                ? `https://www.google.com/maps/search/${searchQuery}`
+                                : `https://www.google.com/search?q=${searchQuery}`;
+                            window.open(searchUrl, '_blank');
+                        }
+                    } else {
+                        // Single line or no newlines
+                        clipboardText = await cleanText(clipboardText); // Clean the whole text
+                        if (clipboardText === '') {
+                             statusElement.textContent = 'Error: Clipboard is empty after cleaning.';
+                             return;
+                        }
+                        const searchQuery = template.replace('%s', encodeURIComponent(clipboardText));
+                        const searchUrl = type === 'maps' 
+                            ? `https://www.google.com/maps/search/${searchQuery}`
+                            : `https://www.google.com/search?q=${searchQuery}`;
+                        window.open(searchUrl, '_blank');
+                    }
                 } catch (err) {
                     statusElement.textContent = 'Error accessing clipboard: ' + err.message;
                 }
