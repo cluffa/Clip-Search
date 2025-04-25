@@ -222,6 +222,10 @@
             font-size: 14px;
             margin: 5px 0;
             font-style: italic;
+            white-space: nowrap; /* Prevent wrapping */
+            overflow: hidden; /* Hide overflow */
+            text-overflow: ellipsis; /* Show ellipsis for overflow */
+            max-width: 100%; /* Ensure it doesn't exceed container width */
         }
     </style>
 </head>
