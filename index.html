@@ -25,7 +25,8 @@
         
         async function cleanText(text) {
             if (!cleanupEnabled) return text;
-            return text.replace(/\s*\n\s*/g, ' ').trim();
+            // Replace tabs with spaces first, then handle newlines, then trim
+            return text.replace(/\t/g, ' ').replace(/\s*\n\s*/g, ' ').trim();
         }
         
         async function searchWithClipboard(isAutoRedirect = false) {
