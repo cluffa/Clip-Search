@@ -29,52 +29,103 @@
             return text.replace(/\t/g, ' ').replace(/\s*\n\s*/g, ' ').trim();
         }
         
+
+        // Modal for multi-line search choice
+        function showMultiLineChoiceModal(onMany, onOne) {
+            // Create modal elements
+            const modalBg = document.createElement('div');
+            modalBg.style.position = 'fixed';
+            modalBg.style.top = 0;
+            modalBg.style.left = 0;
+            modalBg.style.width = '100vw';
+            modalBg.style.height = '100vh';
+            modalBg.style.background = 'rgba(0,0,0,0.3)';
+            modalBg.style.display = 'flex';
+            modalBg.style.alignItems = 'center';
+            modalBg.style.justifyContent = 'center';
+            modalBg.style.zIndex = 10000;
+
+            const modal = document.createElement('div');
+            modal.style.background = 'white';
+            modal.style.padding = '24px 32px';
+            modal.style.borderRadius = '8px';
+            modal.style.boxShadow = '0 2px 16px rgba(0,0,0,0.2)';
+            modal.style.textAlign = 'center';
+            modal.innerHTML = `
+                <div style="font-size:18px;margin-bottom:16px;">Multiple lines detected in clipboard.<br>How do you want to search?</div>
+                <button id="modalMany" style="margin:8px 16px 0 0;padding:8px 20px;">Many searches (one per line)</button>
+                <button id="modalOne" style="margin:8px 0 0 0;padding:8px 20px;">One search (combine all lines)</button>
+            `;
+            modalBg.appendChild(modal);
+            document.body.appendChild(modalBg);
+            document.getElementById('modalMany').onclick = () => {
+                document.body.removeChild(modalBg);
+                onMany();
+            };
+            document.getElementById('modalOne').onclick = () => {
+                document.body.removeChild(modalBg);
+                onOne();
+            };
+        }
+
         async function searchWithClipboard(isAutoRedirect = false) {
             try {
                 let clipboardText = await getClipboardText();
-                
                 if (clipboardText === '') {
                     return false;
                 }
-
                 const lines = clipboardText.split('\n').map(line => line.trim()).filter(line => line !== '');
+                const type = document.getElementById('queryType').value;
 
                 if (lines.length > 1) {
-                    // Multiple lines: Open each in a new tab
-                    for (const line of lines) {
-                        const cleanedLine = await cleanText(line); // Clean each line individually if enabled
-                        const searchQuery = searchTemplate.replace('%s', encodeURIComponent(cleanedLine));
-                        const type = document.getElementById('queryType').value;
-                        const searchUrl = type === 'maps' 
-                            ? `https://www.google.com/maps/search/${searchQuery}`
-                            : `https://www.google.com/search?q=${searchQuery}`;
-                        window.open(searchUrl, '_blank');
-                    }
-                    return true; // Indicate success, even though multiple tabs were opened
+                    // Ask user how to handle multi-line clipboard
+                    return await new Promise((resolve) => {
+                        showMultiLineChoiceModal(
+                            async () => {
+                                // Many searches
+                                for (const line of lines) {
+                                    const cleanedLine = await cleanText(line);
+                                    if (cleanedLine === '') continue;
+                                    const searchQuery = searchTemplate.replace('%s', encodeURIComponent(cleanedLine));
+                                    const searchUrl = type === 'maps'
+                                        ? `https://www.google.com/maps/search/${searchQuery}`
+                                        : `https://www.google.com/search?q=${searchQuery}`;
+                                    window.open(searchUrl, '_blank');
+                                }
+                                resolve(true);
+                            },
+                            async () => {
+                                // One search (combine all lines)
+                                let combined = lines.join(' ');
+                                combined = await cleanText(combined);
+                                if (combined === '') { resolve(false); return; }
+                                const searchQuery = searchTemplate.replace('%s', encodeURIComponent(combined));
+                                const searchUrl = type === 'maps'
+                                    ? `https://www.google.com/maps/search/${searchQuery}`
+                                    : `https://www.google.com/search?q=${searchQuery}`;
+                                if (isAutoRedirect || !arguments.length) {
+                                    window.location.href = searchUrl;
+                                }
+                                resolve(true);
+                            }
+                        );
+                    });
                 } else {
                     // Single line or no newlines
-                    clipboardText = await cleanText(clipboardText); // Clean the whole text
-                    if (clipboardText === '') return false; // Check again after cleaning
-
+                    clipboardText = await cleanText(clipboardText);
+                    if (clipboardText === '') return false;
                     const searchQuery = searchTemplate.replace('%s', encodeURIComponent(clipboardText));
-                    const type = document.getElementById('queryType').value;
-                    const searchUrl = type === 'maps' 
+                    const searchUrl = type === 'maps'
                         ? `https://www.google.com/maps/search/${searchQuery}`
                         : `https://www.google.com/search?q=${searchQuery}`;
-                    
-                    // Only redirect current tab if it's an auto-redirect or a direct button click
-                    // Otherwise (e.g., called from test button), this function shouldn't navigate
-                    if (isAutoRedirect || !arguments.length) { // Check if called by auto-redirect or button click
-                         window.location.href = searchUrl;
+                    if (isAutoRedirect || !arguments.length) {
+                        window.location.href = searchUrl;
                     }
-                    // If called otherwise (e.g., potentially from test button in the future, though it has its own logic now)
-                    // it would just return the URL or success status without navigating.
-                    // For now, the direct button click redirects the current tab.
                     return true;
                 }
             } catch (err) {
                 console.error('Failed to read clipboard or process search:', err);
-                statusElement.textContent = 'Error: ' + err.message; // Display error
+                statusElement.textContent = 'Error: ' + err.message;
                 return false;
             }
         }
